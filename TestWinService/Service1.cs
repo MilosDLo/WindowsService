@@ -29,7 +29,6 @@ namespace TestWinService
 
         PersonJson person = null;
 
-        //json koji moze da se koristi
         string jsonString = @"{
                 'Name' : 'Milos',
                 'Adress' : 'Bg'                        
@@ -78,8 +77,6 @@ namespace TestWinService
             Thread t3 = new Thread(PrintThread);
             t3.Name = "3.";
             t3.Start();
-
-            
 
 
 
