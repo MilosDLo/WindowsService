@@ -18,11 +18,11 @@ namespace TestWinService
     public partial class Service1 : ServiceBase
     {
 
-        string connString = @"Data Source=c:\mydb.sqlite;Version=3";
+        static string connString = @"Data Source=c:\mydb.sqlite;Version=3";
         JsonClass jc;
         MSMQ queue;
 
-
+        
         public Service1()
         {
             InitializeComponent();
@@ -36,49 +36,105 @@ namespace TestWinService
 
 
         }
-        string jsonString = @"{
-                'Name' : 'Milos',
-                'Adress' : 'Bg'                        
-            }";
-            
-
-
+        ///
         protected override void OnStart(string[] args)
-        {       
+        {
             eventLog1.WriteEntry("Servis pokrenut");
 
+            queue = new MSMQ();
+
             //test
-              queue = new MSMQ();
-           // bool a = queue.sendErrorMessageToQueue("Esteh es is es");
-          //  eventLog1.WriteEntry(a.ToString());
+            // for (int i = 0; i < 3; i++)
+            // {
+            //    bool a = queue.sendErrorMessageToQueue("Esteh es is es");
+            // }
+            // eventLog1.WriteEntry(a.ToString());
+            // string b = queue.receiveErrorMessageFromQueue();
+            // eventLog1.WriteEntry(b);
 
-              string b = queue.receiveErrorMessageFromQueue();
-              eventLog1.WriteEntry(b);
+
+            // Thread t1 = new Thread(WaitingForJson);
+            // t1.Name = "ThreadWaitingForJson";
+            // t1.IsBackground = true;
+            // t1.Start();
+            //
+            Thread t2 = new Thread(SendingMsgFromQueueToServer);
+            t2.Name = "ThreadSendingMsgFromQueueToServer";
+            t2.IsBackground = true;
+            t2.Start();
 
 
-            //   Thread t1 = new Thread(WaitingForJson);
-            //   t1.Name = "ThreadWaitingForJson";
-            //   t1.IsBackground = true;
-            //   t1.Start();               
+
+
 
             eventLog1.WriteEntry("Kraj main thread-a");
+        }
+
+        private void SendingMsgFromQueueToServer()
+        {
+            string errorMsg = null;
+
+            while (true)
+            {
+                if (errorMsg == null)
+                {
+                    errorMsg = queue.receiveErrorMessageFromQueue();
+                    try
+                    {
+                        sendingMsgToSever(errorMsg);
+                        errorMsg = null;
+                    }
+                    catch (Exception)
+                    {
+                        Thread.Sleep(60000);
+                        continue;    //mislim da je visak?
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        sendingMsgToSever(errorMsg);
+                        errorMsg = null;
+                    }
+                    catch (Exception)
+                    {
+                        Thread.Sleep(60000);
+                        continue;   //mislim da je visak?
+                    }
+
+
+                }
+            }
+
+        }
+
+        private void sendingMsgToSever(string msgToServer)
+        {
+            //TO-DO: slanje serveru
+            eventLog1.WriteEntry("Poruka poslata serveru.");
+
+
+
         }
 
 
         private void WaitingForJson()
         {
+            var jsonUrl = "http://echo.jsontest.com/Config/b-12-4/Desc/Iron/idjson/1212";
+
             while (true)
             {
-                #region ako se dobije url sa json-om
-                var jsonUrl = "http://echo.jsontest.com/Config/b-12-4/Desc/Iron/idjson/1212";
+                bool isCatch = false;
                 string jsonStringUrl = "";
 
-
+                //skidanje jsona sa servera/web-a
                 try
                 {
                     using (WebClient wc = new WebClient())
                     {
                         jsonStringUrl = wc.DownloadString(jsonUrl);
+
                         jc = JsonConvert.DeserializeObject<JsonClass>(jsonStringUrl);
                     }
                     /*
@@ -91,60 +147,67 @@ namespace TestWinService
                 }
                 catch (Exception)
                 {
-                    eventLog1.WriteEntry("Ne moze da pristupi serveru na datoj adresi,ili je json drugog formata");
-                    //TO-DO:
-                    //ubaci gresku u queue
+                    queue.sendErrorMessageToQueue("Ne moze da pristupi serveru na datoj adresi,ili je json drugog formata");
+                    isCatch = true;
                 }
 
-                
-                #endregion
-
-
-                using (SQLiteConnection conn = new SQLiteConnection(connString))
+                if (!isCatch)
                 {
-                    conn.Open();
-
-                    #region kreiranje baze i tabele
-                    //     using (SQLiteCommand command = new SQLiteCommand("CREATE TABLE IF NOT EXISTS [JsonTable] (id INTEGER PRIMARY KEY AUTOINCREMENT,idjson INTEGER,desc TEXT,config TEXT)", conn))
-                    //     {
-                    //         int i = command.ExecuteNonQuery();
-                    //         eventLog1.WriteEntry(i.ToString());  
-                    //     }
-                    //
-                    //     using (SQLiteCommand command = new SQLiteCommand("INSERT INTO JsonTable (idjson,desc,config) values (112,'proba','nestonesto') ", conn))
-                    //     {
-                    //         int i = command.ExecuteNonQuery();
-                    //         eventLog1.WriteEntry(i.ToString());
-                    //     }
-                    #endregion
-
-                    
-
-                    using (SQLiteCommand command = new SQLiteCommand("SELECT * FROM JsonTable ORDER BY id DESC LIMIT 1", conn))
+                    using (SQLiteConnection conn = new SQLiteConnection(connString))
                     {
-                        using (SQLiteDataReader reader = command.ExecuteReader())
+                        try
                         {
-                            while (reader.Read())
+                            conn.Open();
+                        }
+                        catch (Exception)
+                        {
+                            queue.sendErrorMessageToQueue("Ne moze da otvori konekciju ka bazi.");
+                            Thread.Sleep(60000);
+                            continue;
+                        }
+
+                        #region kreiranje tabele,ako nema
+                        using (SQLiteCommand command = new SQLiteCommand("CREATE TABLE IF NOT EXISTS [JsonTable] (id INTEGER PRIMARY KEY AUTOINCREMENT,idjson INTEGER,desc TEXT,config TEXT)", conn))
+                        {
+                            int i = command.ExecuteNonQuery();
+                            eventLog1.WriteEntry(i.ToString());
+                        }
+                        //
+                        //     using (SQLiteCommand command = new SQLiteCommand("INSERT INTO JsonTable (idjson,desc,config) values (112,'proba','nestonesto') ", conn))
+                        //     {
+                        //         int i = command.ExecuteNonQuery();
+                        //         eventLog1.WriteEntry(i.ToString());
+                        //     }
+                        #endregion
+
+                        using (SQLiteCommand command = new SQLiteCommand("SELECT * FROM JsonTable ORDER BY id DESC LIMIT 1", conn))
+                        {
+                            using (SQLiteDataReader reader = command.ExecuteReader())
                             {
-                                if (jc.IDJson == Int32.Parse(reader[1].ToString()))
+                                if (reader.HasRows)
                                 {
-                                    eventLog1.WriteEntry("Isti jsoni");
+                                    while (reader.Read())
+                                    {
+                                        if (jc.IDJson == Int32.Parse(reader[1].ToString()))
+                                        {
+                                            eventLog1.WriteEntry("Isti jsoni");
+                                        }
+                                        else
+                                        {
+                                            insertIntoTable(conn, jc);
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    string commandText = String.Format("INSERT INTO JsonTable (idjson,desc,config) values ({0},'{1}','{2}')", jc.IDJson, jc.Desc, jc.Config);
-                     
-                                    using (SQLiteCommand commandJsonWrite = new SQLiteCommand(commandText, conn))
-                                    {
-                                        commandJsonWrite.ExecuteNonQuery();
-                                        eventLog1.WriteEntry("Ubacio u bazu");
-                                    }
+                                    insertIntoTable(conn, jc);
                                 }
+
                             }
                         }
                     }
-                    // PrintThread();
                 }
+
                 eventLog1.WriteEntry("Proveravamo opet za 60sec.");
                 Thread.Sleep(60000);
             }
@@ -159,6 +222,17 @@ namespace TestWinService
             #endregion
         }
 
+        private void insertIntoTable(SQLiteConnection conn, JsonClass jclass)
+        {
+            string commandText = String.Format("INSERT INTO JsonTable (idjson,desc,config) values ({0},'{1}','{2}')", jclass.IDJson, jclass.Desc, jclass.Config);
+
+            using (SQLiteCommand commandJsonWrite = new SQLiteCommand(commandText, conn))
+            {
+                commandJsonWrite.ExecuteNonQuery();
+                eventLog1.WriteEntry("Ubacio u bazu");
+            }
+        }
+
 
         // private static async Task<HttpResponseMessage> MakeRequest()
         // {
@@ -166,15 +240,16 @@ namespace TestWinService
         //     return await httpClient.GetAsync(new Uri("http://requestb.in/1f19ydi1"));
         // }
 
+
         private void PrintThread()
         {
-            var message = "Ispisujem iz "  +Thread.CurrentThread.Name+ " thread-a: " + jc.IDJson +", " +jc.Desc+", "+jc.Config;
+            var message = "Ispisujem iz " + Thread.CurrentThread.Name + " thread-a: " + jc.IDJson + ", " + jc.Desc + ", " + jc.Config;
             for (int i = 0; i < 3; i++)
             {
                 eventLog1.WriteEntry(message);
                 Thread.Sleep(1000);
             }
-            
+
         }
 
         protected override void OnStop()
@@ -182,6 +257,6 @@ namespace TestWinService
             eventLog1.WriteEntry(" Servis zaustavljen");
         }
 
-        
+
     }
 }

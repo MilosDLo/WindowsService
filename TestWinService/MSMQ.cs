@@ -24,22 +24,36 @@ namespace TestWinService
 
 
         public string receiveErrorMessageFromQueue()
-        {      
-            try
-            {
-                estehQueue.Formatter = new XmlMessageFormatter(new Type[] { typeof(String) });
-                //da li samo da ceka,ili i ovo sa sekundama?
-                Message errorMessage = estehQueue.Receive(new TimeSpan(0,0,20));
-                string er = errorMessage.Body as string;
+        {
+            estehQueue.Formatter = new XmlMessageFormatter(new Type[] { typeof(String) });
+                  
+            //da li samo da ceka,ili i ovo sa sekundama?
+                  //Message errorMessage = estehQueue.Receive(new TimeSpan(0,0,2));
+                  Message errorMessage = estehQueue.Receive();
+                  string er = errorMessage.Body as string;
+                  return er;
 
-                return er;
-            }
-            catch (Exception)
-            {
-                string err= ("Can't receive message from MSMQ");
-                sendErrorMessageToQueue(err);
-                return "greska";  
-            }
+
+
+            //    try
+            //    {
+            //        estehQueue.Formatter = new XmlMessageFormatter(new Type[] { typeof(String) });
+            //        //da li samo da ceka,ili i ovo sa sekundama?
+            //
+            //        //Message errorMessage = estehQueue.Receive(new TimeSpan(0,0,2));
+            //        Message errorMessage = estehQueue.Receive();
+            //
+            //        string er = errorMessage.Body as string;
+            //
+            //        return er;
+            //    }
+            //    catch (Exception)
+            //    {
+            //        string err= ("Can't receive message from MSMQ");
+            //        sendErrorMessageToQueue(err);
+            //        return "";  
+            //    }
+
         }
 
         public bool sendErrorMessageToQueue(string er)
