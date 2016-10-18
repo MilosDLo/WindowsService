@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Data.SQLite;
 using System.Net.Http;
+using System.IO;
 
 namespace TestWinService
 {
@@ -44,20 +45,19 @@ namespace TestWinService
             queue = new MSMQ();
 
             //test
-            // for (int i = 0; i < 3; i++)
-            // {
-            //    bool a = queue.sendErrorMessageToQueue("Esteh es is es");
-            // }
-            // eventLog1.WriteEntry(a.ToString());
-            // string b = queue.receiveErrorMessageFromQueue();
-            // eventLog1.WriteEntry(b);
+           // for (int i = 0; i < 3; i++)
+           // {
+           //    bool a = queue.sendErrorMessageToQueue("Esteh es is es");
+           // }
+          //  string b = queue.receiveErrorMessageFromQueue();
+          //  eventLog1.WriteEntry(b);
 
 
-            // Thread t1 = new Thread(WaitingForJson);
-            // t1.Name = "ThreadWaitingForJson";
-            // t1.IsBackground = true;
-            // t1.Start();
-            //
+            Thread t1 = new Thread(WaitingForJson);
+            t1.Name = "ThreadWaitingForJson";
+            t1.IsBackground = true;
+            t1.Start();
+           
             Thread t2 = new Thread(SendingMsgFromQueueToServer);
             t2.Name = "ThreadSendingMsgFromQueueToServer";
             t2.IsBackground = true;
@@ -78,14 +78,17 @@ namespace TestWinService
             {
                 if (errorMsg == null)
                 {
+                    //meoda sinhrono ceka da se vrati message,ne ide dalje dok ne dobije
                     errorMsg = queue.receiveErrorMessageFromQueue();
                     try
                     {
                         sendingMsgToSever(errorMsg);
+                        eventLog1.WriteEntry("Poslata poruka iz queue-a serveru:" + errorMsg);
                         errorMsg = null;
                     }
                     catch (Exception)
                     {
+
                         Thread.Sleep(60000);
                         continue;    //mislim da je visak?
                     }
@@ -112,7 +115,30 @@ namespace TestWinService
         private void sendingMsgToSever(string msgToServer)
         {
             //TO-DO: slanje serveru
-            eventLog1.WriteEntry("Poruka poslata serveru.");
+           // string urlServer = "";
+           // try
+           // {
+           //
+           //     WebRequest wrequest = HttpWebRequest.Create(urlServer);
+           //     wrequest.Method = "POST";
+           //
+           //     //encodovanje poruke u byte
+           //     byte[] sendBytes = Encoding.UTF8.GetBytes(msgToServer);
+           //
+           //     Stream sendingStream = wrequest.GetRequestStream();
+           //
+           //     sendingStream.Write(sendBytes, 0, sendBytes.Length);
+           //     sendingStream.Close();
+           //
+           // }
+           // catch (Exception)
+           // {
+           //     queue.sendErrorMessageToQueue("Error connecting to server.");
+           // }
+           //
+
+
+            eventLog1.WriteEntry(msgToServer+" //Poruka poslata serveru.");
 
 
 
@@ -122,10 +148,10 @@ namespace TestWinService
         private void WaitingForJson()
         {
             var jsonUrl = "http://echo.jsontest.com/Config/b-12-4/Desc/Iron/idjson/1212";
-
+            bool isCatch;
             while (true)
             {
-                bool isCatch = false;
+                isCatch = false;
                 string jsonStringUrl = "";
 
                 //skidanje jsona sa servera/web-a
@@ -170,9 +196,9 @@ namespace TestWinService
                         using (SQLiteCommand command = new SQLiteCommand("CREATE TABLE IF NOT EXISTS [JsonTable] (id INTEGER PRIMARY KEY AUTOINCREMENT,idjson INTEGER,desc TEXT,config TEXT)", conn))
                         {
                             int i = command.ExecuteNonQuery();
-                            eventLog1.WriteEntry(i.ToString());
+                            eventLog1.WriteEntry("Pravljenje tabele:"+i.ToString());
                         }
-                        //
+                        //     samo ubacivanje dump podataka
                         //     using (SQLiteCommand command = new SQLiteCommand("INSERT INTO JsonTable (idjson,desc,config) values (112,'proba','nestonesto') ", conn))
                         //     {
                         //         int i = command.ExecuteNonQuery();
@@ -190,7 +216,14 @@ namespace TestWinService
                                     {
                                         if (jc.IDJson == Int32.Parse(reader[1].ToString()))
                                         {
-                                            eventLog1.WriteEntry("Isti jsoni");
+                                            try
+                                            {
+                                                sendingMsgToSever("Isti jsoni");
+                                            }
+                                            catch (Exception)
+                                            {
+                                                queue.sendErrorMessageToQueue("Error sending msg to server");
+                                            }
                                         }
                                         else
                                         {
@@ -208,8 +241,8 @@ namespace TestWinService
                     }
                 }
 
-                eventLog1.WriteEntry("Proveravamo opet za 60sec.");
-                Thread.Sleep(60000);
+                eventLog1.WriteEntry("Proveravamo opet za 60sec.");      
+                Thread.Sleep(60000);       //ili vec na koji interval treba 
             }
 
             #region fora pokupiti body sa urla         
