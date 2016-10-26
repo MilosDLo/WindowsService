@@ -74,10 +74,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Error.cs" />
-    <Compile Include="JsonClass.cs" />
+    <Compile Include="JsonDeserializer.cs" />
+    <Compile Include="ListOneOrder.cs" />
     <Compile Include="MSMQ.cs" />
-    <Compile Include="PersonJson.cs" />
     <Compile Include="ProjectInstaller.cs">
       <SubType>Component</SubType>
     </Compile>
